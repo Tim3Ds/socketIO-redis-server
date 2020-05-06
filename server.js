@@ -8,7 +8,7 @@ const { piece } = require('./spec.js');
 
 const kafka = new Kafka({
   clientId: 'chess-app',
-  brokers: ['192.168.1.137:9092', 'localhost:9092']
+  brokers: ['localhost:9092']
 })
  
 const producer = kafka.producer();
