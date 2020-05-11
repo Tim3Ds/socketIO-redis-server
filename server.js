@@ -49,6 +49,7 @@ io.on('connection', async (socket) => {
 	socket.join('Pre-game');
 	
 	socket.on('message', (message) => {
+		console.log(message);
 		io.emit('chat-message', message);
 	});
 	
