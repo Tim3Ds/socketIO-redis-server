@@ -61,9 +61,18 @@ io.on('connection', async (socket) => {
 	socket.on('create-join-game', (user) => {
 		let gameExists = games.filter( (e) => { return e.gameCode == user.gameCode; }).length > 0;
 		if(!gameExists){
-			game.gameCode = user.gameCode
-			
-			games.push(game)
+			let newgame = game
+			newgame.code = user.gameCode;
+			if(user.player == 'white'){
+				newgame.players.white = user.name;
+			} else if(user.player == 'black') {
+				newgame.players.black = user.name;
+			} else {
+				newgame.players.guests.push(user.name);
+			}
+			newgame.playersInRoom = 0;
+			console.log(newgame);
+			games.push(newgame);
 			console.log('new game ' + user.gameCode + ' created');
 			consumer.subscribe({ topic: 'board-' + user.gameCode })
 			consumer.subscribe({ topic: 'moves-' + user.gameCode })
