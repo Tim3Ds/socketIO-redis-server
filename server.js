@@ -63,7 +63,7 @@ io.on('connection', async (socket) => {
 		if(!gameExists){
 			game.gameCode = user.gameCode
 			
-			games.push(newgame)
+			games.push(game)
 			console.log('new game ' + user.gameCode + ' created');
 			consumer.subscribe({ topic: 'board-' + user.gameCode })
 			consumer.subscribe({ topic: 'moves-' + user.gameCode })
