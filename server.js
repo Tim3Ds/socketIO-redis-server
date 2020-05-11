@@ -47,7 +47,11 @@ io.on('connection', async (socket) => {
 	console.log('user connected ' + userCount + ' user(s)\n\tSetting up comunications');
 	
 	socket.join('Pre-game');
-
+	
+	socket.on('message', (message) => {
+		io.emit('chat-message', message);
+	});
+	
 	socket.on('disconnect', () => {
 		userCount--;
 		console.log('user disconnected ' + userCount + ' user(s)');
@@ -102,7 +106,7 @@ io.on('connection', async (socket) => {
 	});
 
 	socket.on('get-game', (gameCode) => {
-		let gameExists = games.filter( (e) => { return e.gameCode == user.gameCode; }).length > 0;
+		let gameExists = games.filter( (e) => { return e.gameCode == gameCode; }).length > 0;
 		if(gameExists){
 			let dex = games.findIndex( (game) => { return game.code == user.gameCode; });
 			socket.emit('update-conection-settings', games[dex] );
@@ -126,7 +130,7 @@ io.on('connection', async (socket) => {
 	});
 
 	socket.on('square-clicked', (item) => {
-		// console.log(item);
+		console.log(item);
 		io.sockets.in(item.gameCode).emit('clean-square', 'highlight');
 		if (item.type != null){
 			// call Kafka send topic=type data=location
@@ -179,6 +183,15 @@ io.on('connection', async (socket) => {
 				for (let potentialMove in value.moveOptions){
 					io.sockets.in(gameGode).emit('highlight-square', {
 						id: value.moveOptions[potentialMove], 
+						player: value.player 
+					});
+				}
+			}
+			if (key == 'move'){
+				for (let potentialMove in value.moveOptions){
+					io.sockets.in(gameGode).emit('log-move', {
+						id: value.moveTo,
+						oldId: value.moveFrom,
 						player: value.player 
 					});
 				}
