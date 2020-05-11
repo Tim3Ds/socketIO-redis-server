@@ -11,7 +11,7 @@ const kafka = new Kafka({
   clientId: 'chess-app',
   brokers: ['localhost:9092']
 })
-spawn('pawn.py');
+spawn('python3', ['pawn.py']);
 const producer = kafka.producer();
 producer.connect();
 
@@ -92,7 +92,7 @@ io.on('connection', async (socket) => {
 
 			socket.join('Pre-game');
 			io.sockets.in('Pre-game').emit('log', user.name + ' the ' + user.color + ' has left the game')
-			let dex = games.findIndex( (e) => { return e.gameCode == 'Pre-game'; });
+			dex = games.findIndex( (e) => { return e.gameCode == 'Pre-game'; });
 			setBoardState(socket, games[dex].boardState)
 		}else{
 			console.log('no game ' + user.gameCode + ' in', games);

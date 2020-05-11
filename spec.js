@@ -17,7 +17,7 @@ module.exports.piece = {
     }
 };
 
-module.exports.standardChessStartState = {
+let standardChessStartState = {
 	"black": { 
 		"King": ['D1'],
 		"Queen": ['E1'],
@@ -35,6 +35,7 @@ module.exports.standardChessStartState = {
 		"Pawn": ['A7','B7','C7','D7','E7','F7','G7','H7'],
 	}
 }
+module.exports.defaultStartState = standardChessStartState;
 
 module.exports.game = {
     code: 'Pre-Game',
