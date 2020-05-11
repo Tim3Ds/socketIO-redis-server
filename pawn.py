@@ -27,4 +27,4 @@ for message in consumer:
         else:
             pawnMoves = [f"{x}{y - 1}", f"{x}{y - 2}" ]
         
-        producer.send('board', key=b'highlite', value=json.dumps(pawnMoves).encode())
+        producer.send('board', key=b'highlight', value=json.dumps(pawnMoves).encode())
