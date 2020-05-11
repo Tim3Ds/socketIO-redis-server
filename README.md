@@ -8,7 +8,11 @@ cd socketIO
 npm install
 ```
 
-set your kafka server and run server
+set your kafka server
+in server.js line 12
+brokers: ['localhost:9092']
+
+run server...
 
 ```bash
 npm start
