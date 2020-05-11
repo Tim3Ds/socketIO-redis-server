@@ -50,7 +50,7 @@ io.on('connection', async (socket) => {
 	
 	socket.on('message', (message) => {
 		console.log(message);
-		io.emit('chat-message', message);
+		io.sockets.emit('chat-message', message);
 	});
 	
 	socket.on('disconnect', () => {
