@@ -3,22 +3,22 @@ const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const { Kafka } = require('kafkajs');
-const { spawn } = require('child_process')
+const { spawn } = require('child_process');
 
 const { piece, game } = require('./spec.js');
 
 const kafka = new Kafka({
   clientId: 'chess-app',
-  brokers: ['localhost:9092']
-})
+  brokers: ['192.168.1.3:9092']
+});
 spawn('python3', ['pawn.py']);
 const producer = kafka.producer();
 producer.connect();
 
 const consumer = kafka.consumer({ groupId: 'chess-server' });
-consumer.connect()
-consumer.subscribe({ topic: 'board' })
-consumer.subscribe({ topic: 'moves' })
+consumer.connect();
+consumer.subscribe({ topic: 'board' });
+consumer.subscribe({ topic: 'moves' });
 
 var userCount = 0;// total number of players in all of the games
 var games = [game];// array of games
@@ -61,8 +61,9 @@ io.on('connection', async (socket) => {
 	// adds a player to a room if game/room dose not exists creat then join.
 	socket.on('create-join-game', (user) => {
 		let gameExists = games.filter( (e) => { return e.gameCode == user.gameCode; }).length > 0;
+		console.log('game exists ' + gameExists);
 		if(!gameExists){
-			let newgame = game
+			let newgame = game;
 			newgame.code = user.gameCode;
 			if(user.player == 'white'){
 				newgame.players.white = user.name;
@@ -75,18 +76,19 @@ io.on('connection', async (socket) => {
 			console.log(newgame);
 			games.push(newgame);
 			console.log('new game ' + user.gameCode + ' created');
-			consumer.subscribe({ topic: 'board-' + user.gameCode })
-			consumer.subscribe({ topic: 'moves-' + user.gameCode })
+			consumer.subscribe({ topic: 'board-' + user.gameCode });
+			consumer.subscribe({ topic: 'moves-' + user.gameCode });
 		} else {
 			console.log('game ' + user.gameCode + ' exists');
 		}
 		let dex = games.findIndex( (game) => { return game.code == user.gameCode; });
+		console.log(games[dex]);
 		games[dex].playersInRoom += 1;
 		socket.leave('Pre-game');
 		socket.join(user.gameCode);
-		socket.emit('game-joined', games[dex])
+		socket.emit('game-joined', games[dex]);
 		io.sockets.in(user.gameCode).emit('log', user.name + ' connected to game: ' + user.gameCode);
-		setBoardState(socket, game.boardState)
+		setBoardState(socket, game.boardState);
 	});
 
 	socket.on('leave-game-room', (user) => {
@@ -100,14 +102,14 @@ io.on('connection', async (socket) => {
 				games.slice(dex, 1);
 			} 
 			// tell others in room you left
-			io.sockets.in(user.gameCode).emit('log', user.name + ' the ' + user.color + ' has left the game')
+			io.sockets.in(user.gameCode).emit('log', user.name + ' the ' + user.color + ' has left the game');
 			// if game exists join room with gameCode
 			socket.leave(user.gameCode);
 
 			socket.join('Pre-game');
-			io.sockets.in('Pre-game').emit('log', user.name + ' the ' + user.color + ' has left the game')
+			io.sockets.in('Pre-game').emit('log', user.name + ' the ' + user.color + ' has left the game');
 			dex = games.findIndex( (e) => { return e.gameCode == 'Pre-game'; });
-			setBoardState(socket, games[dex].boardState)
+			setBoardState(socket, games[dex].boardState);
 		}else{
 			console.log('no game ' + user.gameCode + ' in', games);
 			socket.emit('log', 'no game');
@@ -131,7 +133,7 @@ io.on('connection', async (socket) => {
 	});
 
 	socket.on('set-board-to-state', (boardState) => {
-		setBoardState(socket, boardState)
+		setBoardState(socket, boardState);
 	});
 	
 	socket.on('place-piece', (item) => {
@@ -151,7 +153,7 @@ io.on('connection', async (socket) => {
 				"messages": [
 				  { "key": item.type , "value": JSON.stringify(item) },
 				],
-			})
+			});
 		}
 	});
 
@@ -171,7 +173,7 @@ io.on('connection', async (socket) => {
 				"messages": [
 				  { "key": item.type , "value": JSON.stringify(item) },
 				],
-			})
+			});
 		}
 	});
 	await consumer.run({
@@ -207,7 +209,7 @@ io.on('connection', async (socket) => {
 				}
 			}
 		}
-	})
+	});
 	console.log('comunications configured');
 
 });
