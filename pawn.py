@@ -13,11 +13,11 @@ consumer = KafkaConsumer('test', 'board', 'moves',
 
 print("test consumer pre message")
 for message in consumer:
-    key = message.key.decode('utf8')
+    print(message)
+    key = message.key
+    messageJSON = json.loads(message.value)
+    print(key, messageJSON['id'])
     if key == 'Pawn':
-        messageJSON = json.loads(message.value.decode('utf8').replace("'", '"'))
-    
-        print(key, messageJSON['id'])
         x = messageJSON['location']['x']
         y = int(messageJSON['location']['y'])
         pawnMoves = []
