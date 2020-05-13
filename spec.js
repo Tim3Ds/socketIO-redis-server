@@ -40,8 +40,8 @@ module.exports.defaultStartState = standardChessStartState;
 module.exports.game = {
     code: 'Pre-game',
     players: {
-        white: 'Billy', // name of user
-        black: 'Pete',
+        white: null, // name of user
+        black: null,
         guests: [] // list of user names
     },
     boardState: standardChessStartState,

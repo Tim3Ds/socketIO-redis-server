@@ -2,24 +2,11 @@ const express = require('express');
 const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
-const { Kafka } = require('kafkajs');
 const { spawn } = require('child_process');
 
 const { piece, game } = require('./spec.js');
 
 spawn('python3', ['pawn.py']);
-
-const kafka = new Kafka({
-  clientId: 'chess-app',
-  brokers: ['192.168.1.3:9092']
-});
-const producer = kafka.producer();
-producer.connect();
-
-const consumer = kafka.consumer({ groupId: 'chess-server' });
-consumer.connect();
-consumer.subscribe({ topic: 'board' });
-consumer.subscribe({ topic: 'moves' });
 
 var userCount = 0;// total number of players in all of the games
 var games = [game];// array of games
@@ -80,6 +67,9 @@ io.on('connection', async (socket) => {
 	socket.on('disconnect', () => {
 		userCount--;
 		console.log('user disconnected ' + userCount + ' user(s)');
+		if( userCount == 0 ){
+			games = [game];
+		}
 	});
 
 	// adds a player to a room if game/room dose not exists creat then join.
@@ -89,13 +79,6 @@ io.on('connection', async (socket) => {
 		if(dex == null){
 			let newgame = game;
 			newgame.code = user.gameCode;
-			if(user.player == 'white'){
-				newgame.players.white = user.name;
-			} else if(user.player == 'black') {
-				newgame.players.black = user.name;
-			} else {
-				newgame.players.guests.push(user.name);
-			}
 			newgame.playersInRoom = 0;
 			console.log(newgame);
 			games.push(newgame);
@@ -105,12 +88,23 @@ io.on('connection', async (socket) => {
 			console.log('game ' + user.gameCode + ' exists');
 		}
 		console.log(games, dex, games[dex]);
-		games[dex].playersInRoom += 1;
+		if(user.player == 'white'){
+			games[dex].players.white = user.name;
+		} else if(user.player == 'black') {
+			games[dex].players.black = user.name;
+		} else {
+			games[dex].players.guests.push(user.name);
+		}
+
+		games[0].playersInRoom -= 1;
 		socket.leave('Pre-game');
-		socket.join(user.gameCode);
+
+		games[dex].playersInRoom += 1;
+		socket.join(games[dex].code);
 		socket.emit('game-joined', games[dex]);
 		io.sockets.in(user.gameCode).emit('log', user.name + ' connected to game: ' + user.gameCode);
 		setBoardState(games[dex].code, games[dex].boardState);
+		console.log('player is in game', games[dex]);
 	});
 
 	socket.on('leave-game-room', (user) => {
@@ -164,13 +158,7 @@ io.on('connection', async (socket) => {
 		io.sockets.in(item.key).emit('clean-square', 'highlight');
 		if (item.type != null){
 			console.log('item ',  JSON.stringify(item));
-			producer.connect();
-			producer.send({
-				"topic": 'board',
-				"messages": [
-				  { "key": item.key , "value": JSON.stringify(item) },
-				],
-			});
+			// set up sedning redis message
 		}
 	});
 
@@ -182,52 +170,45 @@ io.on('connection', async (socket) => {
 		// console.log(item);
 		io.sockets.in(item.gameCode).emit('clean-square', 'highlight');
 		if (item.type != null){
-			item.action = "move";
-			// call Kafka send topic=type data=location
 			console.log('item ', item);
-			producer.connect();
-			producer.send({
-				"topic": 'moves',
-				"messages": [
-				  { "key": item.gameCode , "value": JSON.stringify(item) },
-				],
-			});
+			// set up sedning redis message
 		}
 	});
-	await consumer.run({
-		eachMessage: async ({ topic, message }) => {
-			let value = JSON.parse(message.value.toString());
-			let key = message.key.toString();
-			// console.log("consumer \n", topic, key, value);
+
+	// await consumer.run({
+	// 	eachMessage: async ({ topic, message }) => {
+	// 		let value = JSON.parse(message.value.toString());
+	// 		let key = message.key.toString();
+	// 		// console.log("consumer \n", topic, key, value);
 			
-			if(topic == 'board'){
-				if (value.type == 'get'){
-					for (let potentialMove in value.moveOptions){
-						io.sockets.in(key).emit('get-square', {
-							id: value.moveOptions[potentialMove], 
-							player: value.player 
-						});
-					}
-				}
-				if (value.type == 'highlight'){
-					console.log('highlight');
-					for (let potentialMove in value.moveOptions){
-						io.sockets.in(key).emit('highlight-square', {
-							id: value.moveOptions[potentialMove], 
-							player: value.player 
-						});
-					}
-				}
-			}
-			if (topic == 'moves' && value.type == 'move'){
-				io.sockets.in(key).emit('log-move', {
-					id: value.moveTo,
-					oldId: value.moveFrom,
-					player: value.player 
-				});
-			}
-		}
-	});
+	// 		if(topic == 'board'){
+	// 			if (value.type == 'get'){
+	// 				for (let potentialMove in value.moveOptions){
+	// 					io.sockets.in(key).emit('get-square', {
+	// 						id: value.moveOptions[potentialMove], 
+	// 						player: value.player 
+	// 					});
+	// 				}
+	// 			}
+	// 			if (value.type == 'highlight'){
+	// 				console.log('highlight');
+	// 				for (let potentialMove in value.moveOptions){
+	// 					io.sockets.in(key).emit('highlight-square', {
+	// 						id: value.moveOptions[potentialMove], 
+	// 						player: value.player 
+	// 					});
+	// 				}
+	// 			}
+	// 		}
+	// 		if (topic == 'moves' && value.type == 'move'){
+	// 			io.sockets.in(key).emit('log-move', {
+	// 				id: value.moveTo,
+	// 				oldId: value.moveFrom,
+	// 				player: value.player 
+	// 			});
+	// 		}
+	// 	}
+	// });
 	console.log('comunications configured');
 
 });

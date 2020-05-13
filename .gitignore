@@ -1,6 +1,5 @@
 # Dependency directories
 node_modules
 
-.jshintrc
 .vscode
 .mypy_cache
