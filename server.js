@@ -43,21 +43,19 @@ function getGameIndex(code){
 	return null;
 }
 
-function setPre_game(socket){
-	// set up new player with Pre-game config
-	let dex = getGameIndex('Pre-game');
-	socket.join(games[dex].code);
-	if(dex != null){
-		// console.log('Pre-game game ', games[dex]);
-		setBoardState(games[dex].code, games[dex].boardState);
-	}
-}
-
 io.on('connection', async (socket) => {
 	userCount++;
 	console.log('user connected ' + userCount + ' user(s)\n\tSetting up comunications');
 	
-	setPre_game(socket);
+	
+	socket.emit('get-code', code => {
+		let dex = getGameIndex(code);
+		socket.join(games[dex].code);
+		if(dex != null){
+			// console.log('Pre-game game ', games[dex]);
+			setBoardState(games[dex].code, games[dex].boardState);
+		}
+	});
 	
 	socket.on('message', (message) => {
 		console.log(message);
@@ -119,7 +117,14 @@ io.on('connection', async (socket) => {
 			io.sockets.in(user.gameCode).emit('log', user.name + ' the ' + user.color + ' has left the game');
 			// if game exists join room with gameCode
 			socket.leave(user.gameCode);
-			setPre_game(socket);
+			socket.emit('get-code', code => {
+				let dex = getGameIndex(code);
+				socket.join(games[dex].code);
+				if(dex != null){
+					// console.log('Pre-game game ', games[dex]);
+					setBoardState(games[dex].code, games[dex].boardState);
+				}
+			});
 		}else{
 			console.log('no game ' + user.gameCode + ' in', games);
 			socket.emit('log', 'no game');
@@ -143,6 +148,7 @@ io.on('connection', async (socket) => {
 
 	socket.on('set-board-to-state', (code) => {
 		let dex = getGameIndex(code);
+		console.log("set-board-to-state", code);
 		if(dex != null){
 			setBoardState(games[dex]);
 		}
