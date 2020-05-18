@@ -2,11 +2,12 @@ const express = require('express');
 const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
+
 const { spawn } = require('child_process');
-
-const { piece, game } = require('./spec.js');
-
 spawn('python3', ['pawn.py']);
+
+const { pub, sub } = require("./redis.js");
+const { piece, game } = require('./spec.js');
 
 var userCount = 0;// total number of players in all of the games
 var games = [game];// array of games
@@ -43,16 +44,52 @@ function getGameIndex(code){
 	return null;
 }
 
+function joinGameInGames(dex, user){
+	if(dex != null){
+		console.log('join-game-in-games', dex, games[dex].code);
+		if(user.player == 'white'){
+			games[dex].players.white = user.name;
+		} else if(user.player == 'black') {
+			games[dex].players.black = user.name;
+		} else {
+			games[dex].players.guests.push(user.name);
+		}
+		games[dex].playersInRoom += 1;
+	}
+}
+
+function leaveGameInGames(dex, user){
+	if(dex != null){
+		console.log('join-game-in-games', dex, games[dex].code);
+		if(user.player == 'white'){
+			games[dex].players.white = null;
+		} else if(user.player == 'black') {
+			games[dex].players.black = null;
+		} else {
+			let i = games[dex].players.guests.indexOf(user.name);
+			games[dex].players.guests.slice(i, 1);
+		}
+		games[dex].playersInRoom -= 1;
+		if (games[dex].playersInRoom == 0 && games[dex].code != 'Pre-game'){
+			// remove game from games
+			games.slice(dex, 1);
+		} 
+	}
+}
+
 io.on('connection', async (socket) => {
 	userCount++;
 	console.log('user connected ' + userCount + ' user(s)\n\tSetting up comunications');
 	
 	
-	socket.emit('get-code', code => {
-		let dex = getGameIndex(code);
-		socket.join(games[dex].code);
+	socket.emit('get-user');
+	socket.on('send-user', user => {
+		let dex = getGameIndex(user.gameCode);
 		if(dex != null){
-			// console.log('Pre-game game ', games[dex]);
+			socket.join(games[dex].code);
+
+			joinGameInGames(dex, user);
+
 			setBoardState(games[dex].code, games[dex].boardState);
 		}
 	});
@@ -65,9 +102,6 @@ io.on('connection', async (socket) => {
 	socket.on('disconnect', () => {
 		userCount--;
 		console.log('user disconnected ' + userCount + ' user(s)');
-		if( userCount == 0 ){
-			games = [game];
-		}
 	});
 
 	// adds a player to a room if game/room dose not exists creat then join.
@@ -85,22 +119,15 @@ io.on('connection', async (socket) => {
 		} else {
 			console.log('game ' + user.gameCode + ' exists');
 		}
-		console.log(games, dex, games[dex]);
-		if(user.player == 'white'){
-			games[dex].players.white = user.name;
-		} else if(user.player == 'black') {
-			games[dex].players.black = user.name;
-		} else {
-			games[dex].players.guests.push(user.name);
-		}
-
 		games[0].playersInRoom -= 1;
 		socket.leave('Pre-game');
 
-		games[dex].playersInRoom += 1;
+		joinGameInGames(dex, user);
+
 		socket.join(games[dex].code);
 		socket.emit('game-joined', games[dex]);
 		io.sockets.in(user.gameCode).emit('log', user.name + ' connected to game: ' + user.gameCode);
+
 		setBoardState(games[dex].code, games[dex].boardState);
 		console.log('player is in game', games[dex]);
 	});
@@ -108,23 +135,12 @@ io.on('connection', async (socket) => {
 	socket.on('leave-game-room', (user) => {
 		let dex = getGameIndex(user.gameCode);
 		if(dex != null){
-			games[dex].playersInRoom -= 1;
-			if (games[dex].playersInRoom == 0){
-				// remove game from games
-				games.slice(dex, 1);
-			} 
+			leaveGameInGames(dex, user);
 			// tell others in room you left
+			socket.leave(user.gameCode);
 			io.sockets.in(user.gameCode).emit('log', user.name + ' the ' + user.color + ' has left the game');
 			// if game exists join room with gameCode
-			socket.leave(user.gameCode);
-			socket.emit('get-code', code => {
-				let dex = getGameIndex(code);
-				socket.join(games[dex].code);
-				if(dex != null){
-					// console.log('Pre-game game ', games[dex]);
-					setBoardState(games[dex].code, games[dex].boardState);
-				}
-			});
+			socket.emit('get-user');
 		}else{
 			console.log('no game ' + user.gameCode + ' in', games);
 			socket.emit('log', 'no game');
@@ -165,6 +181,7 @@ io.on('connection', async (socket) => {
 		if (item.type != null){
 			console.log('item ',  JSON.stringify(item));
 			// set up sedning redis message
+			pub.publish("board", JSON.stringify(item));
 		}
 	});
 
@@ -178,46 +195,47 @@ io.on('connection', async (socket) => {
 		if (item.type != null){
 			console.log('item ', item);
 			// set up sedning redis message
+			pub.publish("move", JSON.stringify(item));
 		}
 	});
 
-	// await consumer.run({
-	// 	eachMessage: async ({ topic, message }) => {
-	// 		let value = JSON.parse(message.value.toString());
-	// 		let key = message.key.toString();
-	// 		// console.log("consumer \n", topic, key, value);
-			
-	// 		if(topic == 'board'){
-	// 			if (value.type == 'get'){
-	// 				for (let potentialMove in value.moveOptions){
-	// 					io.sockets.in(key).emit('get-square', {
-	// 						id: value.moveOptions[potentialMove], 
-	// 						player: value.player 
-	// 					});
-	// 				}
-	// 			}
-	// 			if (value.type == 'highlight'){
-	// 				console.log('highlight');
-	// 				for (let potentialMove in value.moveOptions){
-	// 					io.sockets.in(key).emit('highlight-square', {
-	// 						id: value.moveOptions[potentialMove], 
-	// 						player: value.player 
-	// 					});
-	// 				}
-	// 			}
-	// 		}
-	// 		if (topic == 'moves' && value.type == 'move'){
-	// 			io.sockets.in(key).emit('log-move', {
-	// 				id: value.moveTo,
-	// 				oldId: value.moveFrom,
-	// 				player: value.player 
-	// 			});
-	// 		}
-	// 	}
-	// });
-	console.log('comunications configured');
-
 });
+
+sub.on("message", function(channel, message) {
+	let value = JSON.parse(message);
+	
+    console.log("Subscriber received message in channel '" + channel + "': " + message, value);
+
+    
+	if(channel == 'board'){
+		if (value.type == 'get'){
+			for (let potentialMove in value.moveOptions){
+				io.sockets.in(key).emit('get-square', {
+					id: value.moveOptions[potentialMove], 
+					player: value.player 
+				});
+			}
+		}
+		if (value.type == 'highlight'){
+			console.log('highlight');
+			for (let potentialMove in value.moveOptions){
+				io.sockets.in(key).emit('highlight-square', {
+					id: value.moveOptions[potentialMove], 
+					player: value.player 
+				});
+			}
+		}
+	}
+	if (channel == 'moves' && value.type == 'move'){
+		io.sockets.in(key).emit('log-move', {
+			id: value.moveTo,
+			oldId: value.moveFrom,
+			player: value.player 
+		});
+	}
+});
+
+sub.subscribe("board");
 
 http.listen(9591, () => {
 	console.log('socket server on port 9591');
