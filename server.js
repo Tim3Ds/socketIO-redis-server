@@ -3,8 +3,8 @@ const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 
-// const { spawn } = require('child_process');
-// spawn('python3', ['pawn.py']);
+const { spawn } = require('child_process');
+spawn('python3', ['pawn.py']);
 
 const { pub, sub } = require("./redis.js");
 const { piece, game, defaultStartState } = require('./spec.js');
