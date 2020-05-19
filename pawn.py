@@ -20,7 +20,6 @@ while True:
         if message['data'] != 1:
             messageJSON = json.loads(message['data'])
             if b"Pawn" in message['data']:
-                
                 print(messageJSON['id'])
                 x = xIndex.index(messageJSON['location']['x'])
                 y = int(messageJSON['location']['y'])
