@@ -17,32 +17,44 @@ while True:
         # print(message)
         print(message['data'])
         # 1 is the default data responce to subcribing
-        if message['data'] != 1 and b"Pawn" in message['data']:
+        if message['data'] != 1:
             messageJSON = json.loads(message['data'])
-            print(messageJSON['id'])
-            x = xIndex.index(messageJSON['location']['x'])
-            y = int(messageJSON['location']['y'])
-            pawnMoves = []
+            if b"Pawn" in message['data']:
+                
+                print(messageJSON['id'])
+                x = xIndex.index(messageJSON['location']['x'])
+                y = int(messageJSON['location']['y'])
+                pawnMoves = []
 
-            if messageJSON['player'] == 'black':
-                if y == 2:
-                    pawnMoves = [f"{xIndex[x]}{y + 1}", f"{xIndex[x]}{y + 2}"]
-                else:
-                    pawnMoves = [f"{xIndex[x]}{y + 1}"]
-            elif messageJSON['player'] == 'white':
-                if y == 7:
-                    pawnMoves = [f"{xIndex[x]}{y - 1}", f"{xIndex[x]}{y - 2}"]
-                else:
-                    pawnMoves = [f"{xIndex[x]}{y - 1}"]
+                if messageJSON['player'] == 'black':
+                    if y == 2:
+                        pawnMoves = [f"{xIndex[x]}{y + 1}", f"{xIndex[x]}{y + 2}"]
+                    else:
+                        pawnMoves = [f"{xIndex[x]}{y + 1}"]
+                elif messageJSON['player'] == 'white':
+                    if y == 7:
+                        pawnMoves = [f"{xIndex[x]}{y - 1}", f"{xIndex[x]}{y - 2}"]
+                    else:
+                        pawnMoves = [f"{xIndex[x]}{y - 1}"]
 
-            for move in pawnMoves:
-                print(move)
+                for move in pawnMoves:
+                    print(move)
+                    responce = {
+                        "type": "highlight",
+                        "gameCode": messageJSON['code'],
+                        "player": messageJSON['player'],
+                        "id": move,
+                        "optionOwner": messageJSON['id']
+                    }
+                    client.publish('board', json.dumps(responce))
+
+            elif b"move" in message['data']:
+                print(message['data'])
                 responce = {
-                    "type": "highlight",
-                    "gameCode": messageJSON['code'],
+                    "moveTo": messageJSON['newID'],
+                    "moveFrom": messageJSON['oldID'],
                     "player": messageJSON['player'],
-                    "id": move,
-                    "optionOwner": messageJSON['id']
+                    "type": 'Pawn',
+                    "gameCode": messageJSON['code'],
                 }
-
-                client.publish('board', json.dumps(responce))
+                client.publish('moves', json.dumps(responce))

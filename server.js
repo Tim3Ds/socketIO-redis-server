@@ -55,31 +55,27 @@ function joinGameInGames(dex, user){
 			games[dex].players.white = user.name;
 		} else if(user.player == 'black') {
 			games[dex].players.black = user.name;
-		} else {
-			games[dex].players.guests.push(user.name);
 		}
-		games[dex].playersInRoom += 1;
 		return true;
 	}
 	return false;
 }
 
 function leaveGameInGames(dex, user){
+	// console.log('leave-game', dex, user);
 	if(dex != null){
-		console.log('join-game-in-games', dex, games[dex].code);
-		if(user.player == 'white'){
+		console.log('leave-game-in-games', dex, games[dex].code);
+		if(user.name == games[dex].players.white){
 			games[dex].players.white = null;
-		} else if(user.player == 'black') {
+		} else if(user.name == games[dex].players.black) {
 			games[dex].players.black = null;
-		} else {
-			let i = games[dex].players.guests.indexOf(user.name);
-			games[dex].players.guests.slice(i, 1);
-		}
-		games[dex].playersInRoom -= 1;
-		if (games[dex].playersInRoom == 0 && games[dex].code != 'Pre-game'){
-			// remove game from games
-			games.slice(dex, 1);
 		} 
+		if (games[dex].players.black == null && games[dex].players.white == null && games[dex].code != 'Pre-game'){
+			// remove game from games
+			console.log('remove game', games[dex]);
+			games.splice(dex, 1);
+		} 
+		// console.log(games[dex]);
 	}
 }
 
@@ -92,11 +88,16 @@ io.on('connection', async (socket) => {
 	socket.on('send-user', user => {
 		let dex = getGameIndex(user.gameCode);
 		if(dex != null){
+			user.player = 'guest';
 			if (joinGameInGames(dex, user)){
 				socket.join(games[dex].code);
-				socket.emit('game-joined', games[dex]);
+				socket.emit('game-joined', games[dex] );
+				socket.emit('update-conection-settings', games[dex] );
 				setBoardState(games[dex].code);
 			}
+		} else {
+			socket.emit('update-conection-settings', games[0] );
+			socket.emit('clean-square', 'all');
 		}
 	});
 	
@@ -115,26 +116,30 @@ io.on('connection', async (socket) => {
 		console.log('user', user);
 		let dex = getGameIndex(user.gameCode);
 		if(dex == null){
-			let newgame = game;
-			newgame.code = user.gameCode;
-			newgame.playersInRoom = 0;
+			let newgame = {
+				code: user.gameCode,
+				players: {
+					white: null,
+					black: null
+				}
+			};
 			console.log(newgame);
 			games.push(newgame);
 			dex = games.length-1;
 			console.log('new game ' + user.gameCode + ' created', dex);
 
-			pub.set(room+'-board-state', JSON.stringify(defaultStartState));
+			pub.set(user.gameCode+'-board-state', JSON.stringify(defaultStartState));
+			
 		} else {
 			console.log('game ' + user.gameCode + ' exists');
 		}
-		games[0].playersInRoom -= 1;
 		socket.leave('Pre-game');
 
 		if(joinGameInGames(dex, user)){
 			socket.join(games[dex].code);
 			socket.emit('game-joined', games[dex]);
+
 			io.sockets.in(user.gameCode).emit('log', user.name + ' connected to game: ' + user.gameCode);
-	
 			setBoardState(games[dex].code);
 			console.log('player is in game', games[dex]);
 		}
@@ -147,11 +152,11 @@ io.on('connection', async (socket) => {
 			leaveGameInGames(dex, user);
 			// tell others in room you left
 			socket.leave(user.gameCode);
-			io.sockets.in(user.gameCode).emit('log', user.name + ' the ' + user.color + ' has left the game');
-			// if game exists join room with gameCode
-			socket.emit('get-user');
+			io.sockets.in(user.gameCode).emit('log', user.name + ' the ' + user.player + ' has left the game');
+			socket.emit('game-left', games[0] );
+			socket.emit('clean-square', 'all');
 		}else{
-			console.log('no game ' + user.gameCode + ' in', games);
+			console.log('no game ', user, ' in', games);
 			socket.emit('log', 'no game');
 		}
 		
@@ -161,8 +166,10 @@ io.on('connection', async (socket) => {
 		let dex = getGameIndex(gameCode);
 		if(dex != null){
 			socket.emit('update-conection-settings', games[dex] );
+			setBoardState(gameCode);
 		} else {
 			socket.emit('update-conection-settings', null );
+			socket.emit('clean-square', 'all');
 		}
 	});
 
@@ -185,26 +192,39 @@ io.on('connection', async (socket) => {
 	});
 
 	socket.on('square-clicked', (item) => {
-		console.log('square-clicked', item);
-		io.sockets.in(item.code).emit('clean-square', 'highlight');
-		if (item.type != null){
-			console.log('item to piece ',  JSON.stringify(item));
+		// console.log('square-clicked', item);
+		if (item.highlight != null){
+			socket.on('square-responce', (owner) => {
+				// console.log('square-responce', item, 'new', owner);
+				let movePiece = {
+					code: item.code,
+					newID: item.id,
+					oldID: owner.id,
+					type: 'move',
+					player: owner.player
+				};
+				pub.publish(owner.type, JSON.stringify(movePiece));
+			});
+			let moveInfo = {
+				id: item.highlightOwner,
+			};
+			io.sockets.in(item.code).emit('get-square', moveInfo);
+		} else if (item.type != null){
+			// console.log('item type to message ',  JSON.stringify(item));
 			pub.publish(item.type, JSON.stringify(item));
 		}
-		io.sockets.in(item.code).emit('get-square', item);
+
+		io.sockets.in(item.code).emit('clean-square', 'highlight');
 	});
 
-	socket.on('square-responce', (item) => {
-		console.log('square-responce', item);
-		// pub.publish(item.type, JSON.stringify(item));
-	});
+	
 
 });
 
 sub.on("message", function(channel, message) {
 	let value = JSON.parse(message);
 	
-	// console.log("Subscriber received message in channel '" + channel + "'/n", value);
+	console.log("Subscriber received message in channel '" + channel + "'/n", value);
 
 	if(channel == 'board'){
 		// console.log('board');
@@ -217,13 +237,24 @@ sub.on("message", function(channel, message) {
 			io.sockets.in(value.gameCode).emit('highlight-square', value);
 		}
 	}
-	if (channel == 'moves' && value.type == 'move'){
+	if (channel == 'moves'){
+		console.log("channel is moves");
 		io.sockets.in(value.gameCode).emit('log-move', {
-			id: value.moveTo,
-			oldId: value.moveFrom,
-			player: value.player 
+			player: value.player,
+			message:  value.moveFrom + ' ' + value.type[0] + value.moveTo
 		});
-
+		io.sockets.in(value.gameCode).emit('set-piece-on-square', {
+			id: value.moveFrom,
+			color: null,
+			type: null,
+			display: ''
+		});
+		io.sockets.in(value.gameCode).emit('set-piece-on-square', {
+			id: value.moveTo,
+			color: value.player,
+			type: value.type,
+			display: piece[value.player][value.type]
+		});
 	}
 });
 

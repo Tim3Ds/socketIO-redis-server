@@ -41,10 +41,8 @@ module.exports.game = {
     code: 'Pre-game',
     players: {
         white: null, // name of user
-        black: null,
-        guests: [] // list of user names
-    },
-    playersInRoom: 0
+        black: null
+    }
 };
 
 module.exports.user = {
