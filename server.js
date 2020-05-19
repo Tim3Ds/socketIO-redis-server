@@ -3,32 +3,36 @@ const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 
-const { spawn } = require('child_process');
-spawn('python3', ['pawn.py']);
+// const { spawn } = require('child_process');
+// spawn('python3', ['pawn.py']);
 
 const { pub, sub } = require("./redis.js");
-const { piece, game } = require('./spec.js');
+const { piece, game, defaultStartState } = require('./spec.js');
 
 var userCount = 0;// total number of players in all of the games
 var games = [game];// array of games
+pub.set(game.code+'-board-state', JSON.stringify(defaultStartState));// set pre-game board state
 
-let setBoardState = (room, boardState) => {
-	// console.log('set-board-to-state', boardState);
-	for ( let color in boardState ){
-		// console.log(color)
-		for ( let pieceType in boardState[color] ){
-			// console.log(boardState[color][pieceType])
-			for ( let id in boardState[color][pieceType] ){
-				// console.log( color, pieceType, piece[color][pieceType])
-				io.sockets.in(room).emit('set-piece-on-square', {
-					"id": boardState[color][pieceType][id],
-					"color": color,
-					"type": pieceType,
-					"display": piece[color][pieceType]
-				});
+let setBoardState = (room) => {
+	pub.get(room+'-board-state', (err, value) =>{
+		let boardState = JSON.parse(value);
+		// console.log('setBoardState', room, boardState);
+		for ( let color in boardState ){
+			// console.log(color)
+			for ( let pieceType in boardState[color] ){
+				// console.log(boardState[color][pieceType])
+				for ( let id in boardState[color][pieceType] ){
+					// console.log( color, pieceType, piece[color][pieceType])
+					io.sockets.in(room).emit('set-piece-on-square', {
+						"id": boardState[color][pieceType][id],
+						"color": color,
+						"type": pieceType,
+						"display": piece[color][pieceType]
+					});
+				}
 			}
 		}
-	}
+	});	
 };
 
 function getGameIndex(code){
@@ -55,7 +59,9 @@ function joinGameInGames(dex, user){
 			games[dex].players.guests.push(user.name);
 		}
 		games[dex].playersInRoom += 1;
+		return true;
 	}
+	return false;
 }
 
 function leaveGameInGames(dex, user){
@@ -86,11 +92,11 @@ io.on('connection', async (socket) => {
 	socket.on('send-user', user => {
 		let dex = getGameIndex(user.gameCode);
 		if(dex != null){
-			socket.join(games[dex].code);
-
-			joinGameInGames(dex, user);
-
-			setBoardState(games[dex].code, games[dex].boardState);
+			if (joinGameInGames(dex, user)){
+				socket.join(games[dex].code);
+				socket.emit('game-joined', games[dex]);
+				setBoardState(games[dex].code);
+			}
 		}
 	});
 	
@@ -116,20 +122,23 @@ io.on('connection', async (socket) => {
 			games.push(newgame);
 			dex = games.length-1;
 			console.log('new game ' + user.gameCode + ' created', dex);
+
+			pub.set(room+'-board-state', JSON.stringify(defaultStartState));
 		} else {
 			console.log('game ' + user.gameCode + ' exists');
 		}
 		games[0].playersInRoom -= 1;
 		socket.leave('Pre-game');
 
-		joinGameInGames(dex, user);
-
-		socket.join(games[dex].code);
-		socket.emit('game-joined', games[dex]);
-		io.sockets.in(user.gameCode).emit('log', user.name + ' connected to game: ' + user.gameCode);
-
-		setBoardState(games[dex].code, games[dex].boardState);
-		console.log('player is in game', games[dex]);
+		if(joinGameInGames(dex, user)){
+			socket.join(games[dex].code);
+			socket.emit('game-joined', games[dex]);
+			io.sockets.in(user.gameCode).emit('log', user.name + ' connected to game: ' + user.gameCode);
+	
+			setBoardState(games[dex].code);
+			console.log('player is in game', games[dex]);
+		}
+		
 	});
 
 	socket.on('leave-game-room', (user) => {
@@ -157,46 +166,37 @@ io.on('connection', async (socket) => {
 		}
 	});
 
-	socket.on('clean-board', (gameCode) => {
-		console.log('call clean board', gameCode);
-	  	io.sockets.in(gameCode).emit('clean-square', 'all');    
+	socket.on('clean-board', (user) => {
+		console.log('call clean board', user);
+	  	io.sockets.in(user.gameCode).emit('clean-square', 'all');    
 	});
 
 	socket.on('set-board-to-state', (code) => {
 		let dex = getGameIndex(code);
 		console.log("set-board-to-state", code);
 		if(dex != null){
-			setBoardState(games[dex]);
+			setBoardState(code);
 		}
 	});
 	
-	// socket.on('place-piece', (item) => {
-	// 	console.log(item.gameCode + ' place-piece' + item);
-	// 	io.sockets.in(item.gameCode).emit('set-piece-on-square', item);
-	// });
+	socket.on('place-piece', (item) => {
+		console.log(item.gameCode + ' place-piece' + item);
+		io.sockets.in(item.gameCode).emit('set-piece-on-square', item);
+	});
 
 	socket.on('square-clicked', (item) => {
-		// console.log(item);
-		io.sockets.in(item.key).emit('clean-square', 'highlight');
+		console.log('square-clicked', item);
+		io.sockets.in(item.code).emit('clean-square', 'highlight');
 		if (item.type != null){
-			console.log('item ',  JSON.stringify(item));
-			// set up sedning redis message
-			pub.publish("board", JSON.stringify(item));
+			console.log('item to piece ',  JSON.stringify(item));
+			pub.publish(item.type, JSON.stringify(item));
 		}
+		io.sockets.in(item.code).emit('get-square', item);
 	});
 
-	socket.on('square-anounce', (item) => {
-		console.log('TODO: square-anouce');
-	});
-
-	socket.on('highlighted-square-selected', (item) => {
-		// console.log(item);
-		io.sockets.in(item.gameCode).emit('clean-square', 'highlight');
-		if (item.type != null){
-			console.log('item ', item);
-			// set up sedning redis message
-			pub.publish("move", JSON.stringify(item));
-		}
+	socket.on('square-responce', (item) => {
+		console.log('square-responce', item);
+		// pub.publish(item.type, JSON.stringify(item));
 	});
 
 });
@@ -204,38 +204,31 @@ io.on('connection', async (socket) => {
 sub.on("message", function(channel, message) {
 	let value = JSON.parse(message);
 	
-    console.log("Subscriber received message in channel '" + channel + "': " + message, value);
+	// console.log("Subscriber received message in channel '" + channel + "'/n", value);
 
-    
 	if(channel == 'board'){
+		// console.log('board');
 		if (value.type == 'get'){
-			for (let potentialMove in value.moveOptions){
-				io.sockets.in(key).emit('get-square', {
-					id: value.moveOptions[potentialMove], 
-					player: value.player 
-				});
-			}
+			console.log('get');
+			io.sockets.in(value.gameCode).emit('get-square', value);
 		}
 		if (value.type == 'highlight'){
-			console.log('highlight');
-			for (let potentialMove in value.moveOptions){
-				io.sockets.in(key).emit('highlight-square', {
-					id: value.moveOptions[potentialMove], 
-					player: value.player 
-				});
-			}
+			console.log('highlight', value.gameCode, value);
+			io.sockets.in(value.gameCode).emit('highlight-square', value);
 		}
 	}
 	if (channel == 'moves' && value.type == 'move'){
-		io.sockets.in(key).emit('log-move', {
+		io.sockets.in(value.gameCode).emit('log-move', {
 			id: value.moveTo,
 			oldId: value.moveFrom,
 			player: value.player 
 		});
+
 	}
 });
 
 sub.subscribe("board");
+sub.subscribe("moves");
 
 http.listen(9591, () => {
 	console.log('socket server on port 9591');

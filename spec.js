@@ -44,7 +44,6 @@ module.exports.game = {
         black: null,
         guests: [] // list of user names
     },
-    boardState: standardChessStartState,
     playersInRoom: 0
 };
 

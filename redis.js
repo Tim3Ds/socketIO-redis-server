@@ -10,7 +10,7 @@ subscriber.on("error", function(error) {
 });
 
 subscriber.on("subscribe", function(channel, count) {
-    publisher.publish("board", JSON.stringify( {"key": " game code message for the board"}));
+    publisher.publish("board", JSON.stringify( {"type": "test sucsesfull redis config"}));
     // publisher.publish("moves", {"key": "this is a move"}.toSting());
 });
 

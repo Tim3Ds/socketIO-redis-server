@@ -1,30 +1,48 @@
 #!/usr/bin/python3
 
 import json
-from kafka import KafkaConsumer, KafkaProducer
+import redis
 
-producer = KafkaProducer(bootstrap_servers=['192.168.1.3:9092'])
-# producer.send('test', b'Hello, World!')
-# producer.send('test', key=b'message-two', value=b'This is Kafka-Python')
+client = redis.Redis(host='192.168.1.3', port=6379, db=0)
 
-consumer = KafkaConsumer('test', 'board', 'moves',
-                         bootstrap_servers=['192.168.1.3:9092'], group_id='chess-piece-pawn'
-                        )
+# print("test redis pre message")
+pubsub = client.pubsub()
+pubsub.subscribe('Pawn')
 
-print("test consumer pre message")
-for message in consumer:
-    print(message)
-    key = message.key
-    messageJSON = json.loads(message.value)
-    print(key, messageJSON['id'])
-    if key == 'Pawn':
-        x = messageJSON['location']['x']
-        y = int(messageJSON['location']['y'])
-        pawnMoves = []
+xIndex = ['', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 
-        if messageJSON['player'] == 'black':
-            pawnMoves = [f"{x}{y + 1}", f"{x}{y + 2}" ]
-        else:
-            pawnMoves = [f"{x}{y - 1}", f"{x}{y - 2}" ]
-        
-        producer.send('board', key=b'highlight', value=json.dumps(pawnMoves).encode())
+while True:
+    message = pubsub.get_message()
+    if message:
+        # print(message)
+        print(message['data'])
+        # 1 is the default data responce to subcribing
+        if message['data'] != 1 and b"Pawn" in message['data']:
+            messageJSON = json.loads(message['data'])
+            print(messageJSON['id'])
+            x = xIndex.index(messageJSON['location']['x'])
+            y = int(messageJSON['location']['y'])
+            pawnMoves = []
+
+            if messageJSON['player'] == 'black':
+                if y == 2:
+                    pawnMoves = [f"{xIndex[x]}{y + 1}", f"{xIndex[x]}{y + 2}"]
+                else:
+                    pawnMoves = [f"{xIndex[x]}{y + 1}"]
+            elif messageJSON['player'] == 'white':
+                if y == 7:
+                    pawnMoves = [f"{xIndex[x]}{y - 1}", f"{xIndex[x]}{y - 2}"]
+                else:
+                    pawnMoves = [f"{xIndex[x]}{y - 1}"]
+
+            for move in pawnMoves:
+                print(move)
+                responce = {
+                    "type": "highlight",
+                    "gameCode": messageJSON['code'],
+                    "player": messageJSON['player'],
+                    "id": move,
+                    "optionOwner": messageJSON['id']
+                }
+
+                client.publish('board', json.dumps(responce))
