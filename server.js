@@ -83,7 +83,6 @@ io.on('connection', async (socket) => {
 	userCount++;
 	console.log('user connected ' + userCount + ' user(s)\n\tSetting up comunications');
 	
-	
 	socket.emit('get-user');
 	socket.on('send-user', user => {
 		let dex = getGameIndex(user.gameCode);
@@ -185,11 +184,6 @@ io.on('connection', async (socket) => {
 			setBoardState(code);
 		}
 	});
-	
-	socket.on('place-piece', (item) => {
-		console.log(item.gameCode + ' place-piece' + item);
-		io.sockets.in(item.gameCode).emit('set-piece-on-square', item);
-	});
 
 	socket.on('square-clicked', (item) => {
 		// console.log('square-clicked', item);
@@ -225,7 +219,8 @@ sub.on("message", function(channel, message) {
 	let value = JSON.parse(message);
 	
 	console.log("Subscriber received message in channel '" + channel + "'/n", value);
-
+	
+	// consider a switch statment here
 	if(channel == 'board'){
 		// console.log('board');
 		if (value.type == 'get'){
