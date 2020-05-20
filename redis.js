@@ -11,7 +11,7 @@ subscriber.on("error", function(error) {
 
 subscriber.on("subscribe", function(channel, count) {
     publisher.publish("board", JSON.stringify( {"type": "test sucsesfull redis config"}));
-    // publisher.publish("moves", {"key": "this is a move"}.toSting());
+    // publisher.publish("moves", JSON.stringify( {"key": "this is a move"}));
 });
 
 module.exports.pub = publisher;
