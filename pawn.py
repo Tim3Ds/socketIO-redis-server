@@ -13,12 +13,13 @@ pubsub = client.pubsub(ignore_subscribe_messages=True)
 PIECE_TYPE = 'Pawn'
 COL_LETTER_TO_INDEX = ['', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 
+
 def getMoves(messageData):
 	print(messageData['id'])
 	try:
 		col = COL_LETTER_TO_INDEX.index(messageData['location']['x'])
 		row = int(messageData['location']['y'])
-	catch:
+	except:
 		return
 	
 	pieceMoves = []
@@ -58,7 +59,7 @@ def messageHandler(message):
 	#print(message['data'])
 	try:
 		jsonData = loads(message['data'])
-	catch:
+	except:
 		return
 	
 	if PIECE_TYPE == jsonData['type']:
